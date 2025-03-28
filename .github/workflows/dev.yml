@@ -1,0 +1,59 @@
+name: Deploy Lambda Docker Image
+
+on:
+  push:
+    branches:
+      - dev
+      #- main
+    paths:
+      - 'ivrclassifier/**'
+  #pull_request:
+  workflow_dispatch:
+
+permissions:
+      #id-token: write # This is required for aws oidc connection
+      contents: read # This is required for actions/checkout
+      #pull-requests: write # This is required for gh bot to comment PR
+      #issues: write
+
+env:
+  AWS_REGION:  ${{ vars.AWS_REGION }}
+  AWS_ROLE:  ${{ vars.AWS_ROLE }}
+  AWS_ACCOUNT: ${{ vars.AWS_ACCOUNT }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.7
+    
+      - name: Configure AWS credentials from AWS account
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: GitHub-OIDC-TERRAFORM
+
+      - name: Login en Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Construir y etiquetar imagen Docker
+        run: |
+          cd ivrclassifier
+          docker build -t cl2664/transbank-lambda-ivr-classifier .
+          docker tag cl2664/transbank-lambda-ivr-classifier:latest ${{ env.AWS_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/cl2664/transbank-lambda-ivr-classifier:latest
+
+      - name: Subir imagen a ECR
+        run: |
+          ##aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          docker push ${{ env.AWS_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/cl2664/transbank-lambda-ivr-classifier:latest
+
+      - name: Actualizar función Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name cl2664-transbank-lambda-ivr-classifier \
+            --image-uri ${{ env.AWS_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/cl2664/transbank-lambda-ivr-classifier:latest
+
