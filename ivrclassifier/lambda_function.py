@@ -5,7 +5,7 @@ from aws_lambda_powertools import Logger
 from src.ivr_classifier import IvrClassifier
 
 # Configuración de logging con aws-lambda-powertools
-logger = Logger(service="ivr-classifier.")
+logger = Logger(service="ivr-classifier")
 
 # Configuración S3 - Obligatoria para cargar el modelo
 S3_BUCKET = os.environ.get('MODEL_S3_BUCKET')
