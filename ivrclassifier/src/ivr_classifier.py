@@ -6,7 +6,7 @@ import json
 import logging
 import numpy as np
 import joblib  # Usando joblib
-from typing import Dict, List, Union, Optional
+from typing import Optional
 import pandas as pd
 from tqdm import tqdm
 # pandarallel se maneja dentro del __init__
