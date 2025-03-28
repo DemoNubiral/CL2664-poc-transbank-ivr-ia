@@ -16,14 +16,15 @@ permissions:
       #pull-requests: write # This is required for gh bot to comment PR
       #issues: write
 
-env:
-  AWS_REGION:  ${{ vars.AWS_REGION }}
-  AWS_ROLE:  ${{ vars.AWS_ROLE }}
-  AWS_ACCOUNT: ${{ vars.AWS_ACCOUNT }}
+# env:
+#   AWS_REGION:  ${{ vars.AWS_REGION }}
+#   AWS_ROLE:  ${{ vars.AWS_ROLE }}
+#   AWS_ACCOUNT: ${{ vars.AWS_ACCOUNT }}
 
 jobs:
   deploy:
-    environment: dev
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/dev' && 'DEV' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -33,8 +34,8 @@ jobs:
       - name: Configure AWS credentials from AWS account
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE }}
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE }}
+          aws-region: ${{ vars.AWS_REGION }}
           role-session-name: GitHub-OIDC-TERRAFORM
 
       - name: Login to Amazon ECR
@@ -45,15 +46,14 @@ jobs:
         run: |
           cd ivrclassifier
           docker build -t cl2664/transbank-lambda-ivr-classifier .
-          docker tag cl2664/transbank-lambda-ivr-classifier:latest ${{ env.AWS_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/cl2664/transbank-lambda-ivr-classifier:latest
+          docker tag cl2664/transbank-lambda-ivr-classifier:latest ${{ vars.AWS_ACCOUNT }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/cl2664/transbank-lambda-ivr-classifier:latest
 
       - name: Subir imagen a ECR
         run: |
-          docker push ${{ env.AWS_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/cl2664/transbank-lambda-ivr-classifier:latest
+          docker push ${{ vars.AWS_ACCOUNT }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/cl2664/transbank-lambda-ivr-classifier:latest
 
       - name: Actualizar función Lambda
         run: |
           aws lambda update-function-code \
             --function-name cl2664-transbank-lambda-ivr-classifier \
-            --image-uri ${{ env.AWS_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/cl2664/transbank-lambda-ivr-classifier:latest
-
+            --image-uri ${{ vars.AWS_ACCOUNT }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/cl2664/transbank-lambda-ivr-classifier:latest
