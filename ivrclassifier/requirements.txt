@@ -1,0 +1,10 @@
+numpy
+pandas
+tqdm
+pandarallel
+scikit-learn
+boto3
+botocore
+rich
+awslambdaric
+aws-lambda-powertools
