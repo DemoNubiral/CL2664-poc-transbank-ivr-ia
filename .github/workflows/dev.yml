@@ -36,10 +36,10 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: GitHub-OIDC-TERRAFORM
 
-      - name: Login en Amazon ECR
+      - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
+    
       - name: Construir y etiquetar imagen Docker
         run: |
           cd ivrclassifier
@@ -48,7 +48,6 @@ jobs:
 
       - name: Subir imagen a ECR
         run: |
-          ##aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
           docker push ${{ env.AWS_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/cl2664/transbank-lambda-ivr-classifier:latest
 
       - name: Actualizar función Lambda
