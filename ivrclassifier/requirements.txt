@@ -7,5 +7,5 @@ botocore
 rich
 awslambdaric
 aws-lambda-powertools
-joblib==1.0.1
-scikit-learn==0.24.2
+joblib
+scikit-learn
