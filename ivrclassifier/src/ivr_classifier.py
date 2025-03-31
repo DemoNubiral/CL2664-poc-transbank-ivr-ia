@@ -657,8 +657,7 @@ class IvrClassifier(BaseEstimator, ClassifierMixin):
         IvrClassifier
             Instancia del modelo cargado.
         """
-        import src.ivr_classifier
-
+        
         logger = logging.getLogger(cls.__name__)
         logger.info(f"Intentando cargar modelo con joblib desde: {path}")
 
