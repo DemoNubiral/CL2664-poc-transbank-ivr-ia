@@ -8,5 +8,3 @@ botocore
 rich
 awslambdaric
 aws-lambda-powertools
-loky
-joblib

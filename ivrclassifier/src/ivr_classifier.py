@@ -6,7 +6,7 @@ import json
 import logging
 import numpy as np
 import joblib  # Usando joblib
-from typing import Optional
+from typing import Dict, List, Union, Optional
 import pandas as pd
 from tqdm import tqdm
 # pandarallel se maneja dentro del __init__
@@ -15,7 +15,6 @@ from src.bedrock_models_v2 import LLMClient, ModelConfig  # Asumiendo que LLMCli
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
-from loky.process_executor import TerminatedWorkerError
 
 class IvrClassifier(BaseEstimator, ClassifierMixin):
     """
@@ -657,7 +656,6 @@ class IvrClassifier(BaseEstimator, ClassifierMixin):
         IvrClassifier
             Instancia del modelo cargado.
         """
-        
         logger = logging.getLogger(cls.__name__)
         logger.info(f"Intentando cargar modelo con joblib desde: {path}")
 
@@ -683,8 +681,12 @@ class IvrClassifier(BaseEstimator, ClassifierMixin):
         except FileNotFoundError:
             logger.error(f"Error crítico: No se encontró el archivo del modelo en la ruta especificada: {path}")
             raise
-        except (TerminatedWorkerError, EOFError, ImportError, TypeError) as e:
-
+        except (
+            joblib.externals.loky.process_executor.TerminatedWorkerError,
+            EOFError,
+            ImportError,
+            TypeError,
+        ) as e:
             logger.error(
                 f"Error crítico al deserializar el modelo desde {path} con joblib. El archivo podría estar corrupto o ser incompatible. Error: {e}",
                 exc_info=True,
