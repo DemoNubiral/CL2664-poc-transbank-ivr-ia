@@ -682,7 +682,7 @@ class IvrClassifier(BaseEstimator, ClassifierMixin):
             logger.error(f"Error crítico: No se encontró el archivo del modelo en la ruta especificada: {path}")
             raise
         except (
-            joblib.externals.loky.process_executor.TerminatedWorkerError,
+            # joblib.externals.loky.process_executor.TerminatedWorkerError,
             EOFError,
             ImportError,
             TypeError,
