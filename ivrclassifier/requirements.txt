@@ -2,9 +2,10 @@ numpy
 pandas
 tqdm
 pandarallel
-scikit-learn
 boto3
 botocore
 rich
 awslambdaric
 aws-lambda-powertools
+joblib==1.0.1
+scikit-learn==0.24.2
