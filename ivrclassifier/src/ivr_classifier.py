@@ -6,14 +6,15 @@ import json
 import logging
 import numpy as np
 import joblib  # Usando joblib
-from typing import Dict, List, Union, Optional
+from typing import Optional
 import pandas as pd
 from tqdm import tqdm
 # pandarallel se maneja dentro del __init__
 from src.bedrock_models_v2 import LLMClient, ModelConfig  # Asumiendo que LLMClient se usa aquí
 
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
+from sklearn.utils.validation import check_X_y, check_is_fitted
+from sklearn.exceptions import NotFittedError
 
 
 class IvrClassifier(BaseEstimator, ClassifierMixin):
