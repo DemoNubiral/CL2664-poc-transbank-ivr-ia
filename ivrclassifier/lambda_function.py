@@ -5,7 +5,7 @@ from aws_lambda_powertools import Logger
 from src.ivr_classifier import IvrClassifier
 
 # Configuración de logging con aws-lambda-powertools
-logger = Logger(service="ivr-classifier.")
+logger = Logger(service="ivr-classifier")
 
 # Configuración S3 - Obligatoria para cargar el modelo
 S3_BUCKET = os.environ.get('MODEL_S3_BUCKET')
@@ -110,6 +110,7 @@ def lambda_handler(event, context):
             "text": text_to_classify[:100] + "..." if len(text_to_classify) > 100 else text_to_classify,
             "category": prediction if isinstance(prediction, str) else prediction.tolist() if hasattr(prediction, 'tolist') else prediction
         }
+        logger.info("Resultado predicción", extra={"response_data": response_data})
         
         return format_response(200, response_data)
     except Exception:
