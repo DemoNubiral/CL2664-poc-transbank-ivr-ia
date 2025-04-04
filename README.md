@@ -1,10 +1,12 @@
 # Nubiral - Modelo IA/IVR Transbank
 
-## **Objetivo**
+## **Análisis y estrategias de mejora del modelo de clasificación**
+
+### **Objetivo**
 
 Este proyecto tiene como objetivo desarrollar un modelo de Inteligencia Artificial para predecir la cola de atención adecuada en un sistema IVR (Respuesta de Voz Interactiva) de Transbank. La predicción se basa en el mensaje del usuario, obtenido a través del AST (Abstract Syntax Tree) de Amazon Lex.
 
-## **Datos**
+### **Datos**
 
 1.  **Fuente:** Se utilizó un archivo Excel (`KB2000_test_audio_inferido_ofuscado.xlsm`).
 2.  **Columnas Relevantes:** `Etiqueta` (la cola objetivo/categoría), `Intencion` (intención generalizada del usuario), `Problema` (problema generalizado del usuario).
@@ -18,11 +20,11 @@ Este proyecto tiene como objetivo desarrollar un modelo de Inteligencia Artifici
     *   Los datos sintéticos generados se añadieron exclusivamente al conjunto de **entrenamiento** para mejorar la robustez del modelo sin afectar la evaluación en el conjunto de prueba.
     *   La distribución de clases en el conjunto de entrenamiento se vio más balanceada tras el aumento.
 
-## **Metodología y Pruebas Realizadas**
+### **Metodología y Pruebas Realizadas**
 
 Se exploraron diversos enfoques para la clasificación de los textos de los usuarios:
 
-### 1. Métodos Clásicos de Machine Learning
+#### 1. Métodos Clásicos de Machine Learning
 
 *   **Baseline (TF-IDF + Regresión Logística):**
     *   Se vectorizó el texto (`full_text`) utilizando TF-IDF (`TfidfVectorizer`).
@@ -33,7 +35,7 @@ Se exploraron diversos enfoques para la clasificación de los textos de los usua
         *   **Cohere Embeddings**
     *   Se entrenaron modelos de Regresión Logística separados utilizando cada tipo de embedding como características. Estos modelos se entrenaron sobre el conjunto de *entrenamiento original* (usando los índices de la división inicial).
 
-### 2. Métodos de IA Generativa (GenAI - Few-Shot / In-Context Learning)
+#### 2. Métodos de IA Generativa (GenAI - Few-Shot / In-Context Learning)
 
 Estos enfoques utilizan Large Language Models (LLMs) directamente para la clasificación, aprovechando su capacidad de entender el contexto proporcionado en el prompt.
 
@@ -60,7 +62,7 @@ Estos enfoques utilizan Large Language Models (LLMs) directamente para la clasif
             *   Instrucciones para seleccionar la categoría más adecuada y devolverla en formato JSON (`{"choice": "[Categoría]"}`).
         *   Se realizaron inferencias sobre el conjunto de *prueba* utilizando **Claude 3.5 Sonnet**, probando el contexto generado por *cada una de las variantes de PEP*.
 
-## **Resultados**
+### **Resultados**
 
 Se evaluó el rendimiento de todos los métodos en el conjunto de **prueba** (sin datos sintéticos). Las métricas principales fueron Accuracy, Precision, Recall y F1-Score (promedio ponderado).
 
@@ -87,13 +89,13 @@ Se evaluó el rendimiento de todos los métodos en el conjunto de **prueba** (si
 *   El uso de embeddings (Titan y Cohere) con Regresión Logística mostró resultados mixtos, con Titan superando ligeramente al baseline TF-IDF, pero Cohere rindiendo por debajo.
 *   El aumento de datos en el conjunto de entrenamiento parece haber beneficiado a los modelos.
 
-## **Potencial Despliegue (Lambda)**
+### **Potencial Despliegue (Lambda)**
 
 Se incluye un ejemplo en la carpeta `ivr_classifier` de cómo se podría estructurar una función AWS Lambda (`lambda_handler`) para desplegar el clasificador. Este ejemplo utiliza la clase `IvrClassifier` desarrollada en el proyecto, que encapsula la lógica de carga del modelo (potencialmente desde S3) y la predicción. Se utiliza `aws-lambda-powertools` para el logging estructurado.
 
-## **Conclusión**
+### **Conclusión**
 
-### Descargo de responsabilidad
+#### Descargo de responsabilidad
 
 Las pruebas se llevaron a cabo utilizando un conjunto de datos de tamaño reducido, cuya representatividad respecto a la población objetivo presenta limitaciones significativas. Por lo tanto, los resultados presentados a continuación deben interpretarse con cautela.
 
@@ -104,7 +106,7 @@ Este rendimiento supera notablemente a los métodos clásicos basados en TF-IDF 
 
 Se recomienda seguir realizando pruebas del **enfoque Nubiral con el prompt PEP Gemini Pro Exp** para comprobar si la mejoría de la asertividad solo funciona con este conjunto de datos o si puede aplicarse globalmente. La estructura propuesta para una función Lambda facilita su potencial despliegue en un entorno productivo.
 
-## **Pasos futuros**
+### **Pasos futuros**
 - Aumentar la cantidad de muestras disponibles, acompañado de un proceso de depuración que garantice una mayor calidad y representatividad de los datos.
 
 - Explorar la aplicación de técnicas de fine-tuning sobre modelos preentrenados como BERT, con el objetivo de mejorar el desempeño en tareas específicas.
@@ -112,3 +114,71 @@ Se recomienda seguir realizando pruebas del **enfoque Nubiral con el prompt PEP 
 - Evaluar e implementar algoritmos de conversión de audio a texto más avanzados, alineándose con el estado del arte (State of the Art, SOTA).
 
 - Estimar el volumen de uso futuro de la herramienta, a fin de seleccionar la arquitectura más adecuada, considerando tanto los requisitos técnicos como la viabilidad económica de la solución.
+
+## Arquitectura
+
+El equipo de Nubiral decidió construir la siguiente arquitectura dentro de AWS para poder demostrar las capacidades que tiene el servicio **Amazon Lex**, **AWS Bedrock** y **AWS Lambda**.
+
+![Arquitectura propuesta](imgs/img27.jpg)
+
+### Componentes
+
+#### Bucket de S3
+
+Para poder simular el comportamiento de Genesys Cloud, el equipo optó por realizar la ingesta de datos al sistema mediante un Bucket de **AWS S3**.
+
+Este Bucket va a guardar:
+- Los audios a clasificar
+- Los resultados de las transcripciones realizadas por Amazon Lex
+- Los modelos creados por los Data Scientists del equipo
+
+##### Estructura del Bucket
+
+Para mantener el orden dentro del Bucket, se crearon tres directorios:
+- `models`
+- `transcripts`
+- `audios`
+
+##### Event Notifications del Bucket
+
+El Bucket tiene configuradas dos Event Notifications:
+
+1. **Evento 1:**  
+   - Tipo: `s3:ObjectCreated:*` en el directorio `audios`  
+   - Función: Llama a una Lambda encargada de comunicarse con Amazon Lex.  
+   - Propósito: Inicia el mecanismo del sistema.
+
+2. **Evento 2:**  
+   - Tipo: `s3:ObjectCreated:*` en el directorio `transcripts`  
+   - Función: Llama a otra Lambda que realiza la clasificación del texto transcripto por Lex.
+
+##### Configuración del Bucket
+
+Pasos seguidos para la creación y configuración del Bucket:
+
+1. Navegar a AWS S3 y crear un nuevo Bucket.
+![Paso 1 bucket](imgs/img34.jpg)
+2. Configurarlo como **General Purpose**, asignar nombre y dejar opciones por defecto.
+![Paso 2 bucket](imgs/img37.jpg)
+3. Crear los directorios: `audios`, `models`, `transcripts`.
+![Paso 3 bucket](imgs/img38.jpg)
+4. Configurar los eventos:
+   - Ir a **Properties > Event Notifications**
+   - Seleccionar **Create event notification**
+   - **Nota:** Las Lambda functions deben estar previamente creadas.
+![Paso 4 bucket](imgs/img_final.png)
+
+#### Lambda que interactúa con Lex
+
+Lambda diseñada para:
+- Tomar los audios desde el Bucket
+- Transformarlos a un formato compatible con Amazon Lex
+- Enviar los audios a Amazon Lex
+
+#### Amazon Lex
+
+Servicio utilizado para realizar la transcripción de los audios cargados al Bucket S3.
+
+#### Lambda que realiza la clasificación del texto
+
+El nombre de esta lambda es `ivr-classifier`, se activa cuando se genera un nuevo archivo en el directorio `transcripts` y se encarga de clasificar el texto que fue transcripto por *Lex* utilizando las capacidades de *Amazon Bedrock*.
