@@ -115,6 +115,73 @@ Se recomienda seguir realizando pruebas del **enfoque Nubiral con el prompt PEP 
 
 - Estimar el volumen de uso futuro de la herramienta, a fin de seleccionar la arquitectura más adecuada, considerando tanto los requisitos técnicos como la viabilidad económica de la solución.
 
+## **Análisis y estrategias de mejora del modelo de transcripción**
+
+### **Objetivo**
+
+Este proyecto tiene como objetivo automatizar el proceso de análisis de grabaciones de audio (presumiblemente de un call center) almacenadas en Amazon S3. El sistema transcribe las grabaciones, utiliza un Modelo de Lenguaje Grande (LLM) para identificar la **intención principal** expresada por el cliente, y localiza el **segmento exacto** de la transcripción (con tiempos de inicio y fin) donde se manifiesta dicha intención. El resultado final es un archivo estructurado (CSV) que facilita análisis posteriores.
+
+### **Datos**
+
+1.  **Fuente:** Archivos de audio en formatos `.m4a` y `.opus` ubicados en el bucket de Amazon S3: `cl2664-s3-demo-transbank-transcribe`.
+2.  **Datos Intermedios:** La salida del servicio AWS Transcribe, que incluye:
+    *   La transcripción completa del audio.
+    *   Una lista detallada de `items`, donde cada ítem representa una palabra o signo de puntuación detectado, junto con sus tiempos de inicio y fin, y posibles alternativas de transcripción.
+3.  **Preprocesamiento (para localización de intención):**
+    *   Dentro de la lógica de localización (`_find_intent_times`), se aplica normalización de texto tanto a la intención extraída por el LLM como a las palabras de la transcripción (`items`). Esta normalización incluye: conversión a minúsculas, eliminación de signos de puntuación y acentos, y eliminación de espacios extra. Esto se hace para mejorar la robustez de la coincidencia entre la intención y el texto transcrito.
+4.  **División:** No se realiza una división explícita en conjuntos de entrenamiento y prueba. El script procesa *todos* los archivos de audio encontrados en el bucket S3 especificado.
+5.  **Aumento de Datos (Augmentation):** No se utiliza aumento de datos en este notebook.
+
+### **Metodología y Pruebas Realizadas**
+
+El notebook implementa un único flujo de trabajo secuencial para cada archivo de audio. No compara diferentes métodos, sino que ejecuta un proceso definido:
+
+1.  **Transcripción Automática (Speech-to-Text):**
+    *   Se utiliza el servicio **AWS Transcribe**.
+    *   Se configura para el idioma español (`es-US`).
+    *   Se habilitan las opciones `ShowSpeakerLabels` (para identificar hablantes, aunque no se usa explícitamente en la lógica posterior) y `ShowAlternatives` (para obtener transcripciones alternativas por palabra, usadas implícitamente en la coincidencia).
+    *   El script inicia un trabajo de transcripción por archivo, espera su finalización y recupera el resultado en formato JSON.
+
+2.  **Extracción de Intención Principal (LLM):**
+    *   Se utiliza un cliente LLM (`LLMClient` del módulo `src.bedrock_models_v2`) interactuando con **AWS Bedrock**.
+    *   El modelo LLM especificado es **Claude 3.7 Sonnet**.
+    *   Se envía la transcripción completa al LLM junto con un `system_prompt` específico que instruye al modelo para identificar la necesidad principal del cliente en un contexto de call center bancario y extraer el fragmento de texto exacto que la expresa (entre comillas).
+    *   Se extrae la intención textual de la respuesta del LLM (priorizando el texto entre comillas).
+
+3.  **Localización Temporal de la Intención (Coincidencia Difusa):**
+    *   Se implementa una lógica personalizada (`_find_intent_times`) para encontrar la secuencia de palabras (normalizadas) correspondientes a la intención extraída dentro de la lista de `items` (palabras normalizadas con tiempos) de la transcripción.
+    *   Se utiliza una función de similitud de palabras personalizada (`_word_similarity`) y un enfoque de ventana deslizante para encontrar la mejor secuencia coincidente.
+    *   Se calcula una puntuación de **confianza** (0-1) basada en la calidad de la coincidencia (proporción de palabras coincidentes y su similitud).
+    *   Se determinan los **tiempos de inicio y fin** basados en los tiempos de la primera y última palabra de la secuencia mejor coincidente encontrada (si supera un umbral de confianza).
+    *   Si no se encuentra una coincidencia satisfactoria, se registra como `NO_INTENT_DETECTED` (o se reporta la mejor coincidencia parcial si supera un umbral inferior).
+
+4.  **Almacenamiento de Resultados:**
+    *   Los resultados (nombre de archivo, transcripción, intención, tiempos, confianza) se recopilan en un DataFrame de Pandas.
+    *   El DataFrame se guarda en un archivo CSV con un timestamp en el nombre y usando `|` como delimitador.
+
+### **Resultados**
+
+La ejecución mostrada en la salida del notebook procesó 9 archivos de audio.
+
+*   **Archivos Procesados:** 9
+*   **Archivos con Intención Detectada y Localizada:** 8 (88%)
+*   **Archivos Sin Intención Clara (o fallo en localización):** 1 (11%)
+    *   Se reportó explícitamente un fallo en la localización para la intención "poner una nota" en uno de los archivos, indicando una confianza de coincidencia insuficiente (0.67, por debajo del umbral primario).
+*   **Salida Detallada:** Se generó un archivo CSV (ej: `transcriptions_with_intent_20250321_124532.csv`) con las siguientes columnas para cada archivo procesado:
+    *   `audio_file`: Nombre del archivo original.
+    *   `transcript`: Transcripción completa.
+    *   `intent_text`: Texto de la intención extraída (o estado como `NO_INTENT_DETECTED`).
+    *   `intent_detected`: Booleano indicando éxito.
+    *   `start_time`: Tiempo de inicio de la intención (segundos).
+    *   `end_time`: Tiempo de fin de la intención (segundos).
+    *   `confidence`: Puntuación de confianza de la localización.
+
+### **Conclusión**
+
+El notebook demuestra un flujo de trabajo efectivo para automatizar la extracción de información clave (transcripción e intención principal localizada) a partir de grabaciones de audio utilizando una combinación de servicios de AWS (S3, Transcribe, Bedrock con Claude 3.7 Sonnet) y lógica personalizada de procesamiento de texto (normalización y coincidencia difusa). El enfoque logra identificar y ubicar temporalmente la necesidad principal del cliente en la mayoría de los casos procesados.
+
+La principal fortaleza radica en la integración de la transcripción detallada (con tiempos por palabra) y la capacidad de comprensión del LLM, unidas por un algoritmo de coincidencia para anclar la intención detectada en la línea de tiempo del audio. El fallo observado en la localización de una intención sugiere que el algoritmo de coincidencia o sus umbrales podrían requerir ajustes para manejar ciertos casos.
+
 ## Arquitectura
 
 El equipo de Nubiral decidió construir la siguiente arquitectura dentro de AWS para poder demostrar las capacidades que tiene el servicio **Amazon Lex**, **AWS Bedrock** y **AWS Lambda**.
