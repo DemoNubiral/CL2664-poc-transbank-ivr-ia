@@ -1,5 +1,37 @@
 # Nubiral - Modelo IA/IVR Transbank
 
+- [Nubiral - Modelo IA/IVR Transbank](#nubiral---modelo-iaivr-transbank)
+  - [**Análisis y estrategias de mejora del modelo de clasificación**](#análisis-y-estrategias-de-mejora-del-modelo-de-clasificación)
+    - [**Objetivo**](#objetivo)
+    - [**Datos**](#datos)
+    - [**Metodología y Pruebas Realizadas**](#metodología-y-pruebas-realizadas)
+      - [1. Métodos Clásicos de Machine Learning](#1-métodos-clásicos-de-machine-learning)
+      - [2. Métodos de IA Generativa (GenAI - Few-Shot / In-Context Learning)](#2-métodos-de-ia-generativa-genai---few-shot--in-context-learning)
+    - [**Resultados**](#resultados)
+    - [**Potencial Despliegue (Lambda)**](#potencial-despliegue-lambda)
+    - [**Conclusión**](#conclusión)
+      - [Descargo de responsabilidad](#descargo-de-responsabilidad)
+    - [**Pasos futuros**](#pasos-futuros)
+  - [**Análisis y estrategias de mejora del modelo de transcripción**](#análisis-y-estrategias-de-mejora-del-modelo-de-transcripción)
+    - [**Objetivo**](#objetivo-1)
+    - [**Datos**](#datos-1)
+    - [**Metodología y Pruebas Realizadas**](#metodología-y-pruebas-realizadas-1)
+    - [**Resultados**](#resultados-1)
+    - [**Conclusión**](#conclusión-1)
+  - [Arquitectura](#arquitectura)
+    - [Componentes](#componentes)
+      - [Bucket de S3](#bucket-de-s3)
+        - [Estructura del Bucket](#estructura-del-bucket)
+        - [Event Notifications del Bucket](#event-notifications-del-bucket)
+        - [Configuración del Bucket](#configuración-del-bucket)
+      - [Lambda que interactúa con Lex](#lambda-que-interactúa-con-lex)
+        - [Permisos del Role de ejecución de la Lambda](#permisos-del-role-de-ejecución-de-la-lambda)
+          - [Configuraciones Extra](#configuraciones-extra)
+      - [Lambda que realiza la clasificación del texto](#lambda-que-realiza-la-clasificación-del-texto)
+        - [Permisos del Role de ejecución de la Lambda](#permisos-del-role-de-ejecución-de-la-lambda-1)
+        - [Configuraciones Extra](#configuraciones-extra-1)
+
+
 ## **Análisis y estrategias de mejora del modelo de clasificación**
 
 ### **Objetivo**
@@ -242,10 +274,49 @@ Lambda diseñada para:
 - Transformarlos a un formato compatible con Amazon Lex
 - Enviar los audios a Amazon Lex
 
-#### Amazon Lex
+**Amazon Lex**: Servicio utilizado para realizar la transcripción de los audios cargados al Bucket S3.
 
-Servicio utilizado para realizar la transcripción de los audios cargados al Bucket S3.
+##### Permisos del Role de ejecución de la Lambda
+El role correspondiente a esta función va a necesitar tener el permiso de *AmazonLexFullAccess*, *AWSLambdaBasicExecutionRole,* y un permiso que nos permita hacer las operaciones `Get` y `Post` dentro del Bucket de S3 que configuramos anteriormente.
+
+###### Configuraciones Extra
+Dado que vamos a interactuar con la API de Lex(más en específico, la función `recognize_utterance` de boto3), necesitamos configurar un timeout de 1 minuto para la función, además de configurar las siguientes variables de entorno: `LEX_BOT_ALIAS_ID`, `LEX_BOT_ID` y `LEX_BOT_LOCALE`. En el paso para configurar el Bot de Lex, vamos a conseguir los valores para estas variables.
+
+Creación y configuración del Bot de Amazon Lex
+1. Navegamos dentro de Lex y tocamos el botón de “Create bot”
+![Paso 1 Lex](imgs/transbank-006.png)
+
+2. Seleccionamos este *creation method* y luego ingresamos el nombre del Bot. Todas las demás configuraciones vamos a dejarlas por default.
+![Paso 2 Lex](imgs/transbank-007.png)
+
+3. Dado que vamos a trabajar con un Bot que no requiere dar respuestas de voz, configuramos en la parte de *Add languages* lo siguiente:
+![Paso 3 Lex](imgs/transbank-008.png)
+
+4. En la sección de *NewIntent*, vamos a configurar los *Sample utterances*. Aquí le vamos a pasar unos textos de ejemplo como los siguientes:
+![Paso 4 Lex](imgs/transbank-009.png)
+
+5. Dejamos las demás opciones por default, le damos a *Save Intent*, y luego arriba vamos a testear y buildear el *Intent*
+![Paso 5 Lex](imgs/transbank-010.png)
+
+6. Navegamos a la sección de Versions dentro del Bot:
+![Paso 6 Lex](imgs/transbank-011.png)
+
+7. Creamos una nueva versión seleccionando el lenguaje que configuramos en la sección 5.
+
+8. A continuación, entramos en el Bot, y navegamos a la sección de *Aliases*
+![Paso 8 Lex](imgs/transbank-012.png)
+
+9. Seleccionamos la versión que creamos en el paso 7, y creamos el alias
+![Paso 9 Lex](imgs/transbank-013.png)
+
+10. Con esto ya podemos extraer las variables de entorno que vamos a setear en la Lambda function(atención: en caso de haber seleccionado como lenguaje al español de latam, la variable `LEX_BOT_LOCALE` debe tener el valor de *es_419*). La función declarada en la sección anterior ahora va a ser capaz de llamar a la API de Lex para interactuar con este Bot que creamos, y las transcripciones van a quedar guardadas en el Bucket de S3 dentro del directorio transcripts.
 
 #### Lambda que realiza la clasificación del texto
 
 El nombre de esta lambda es `ivr-classifier`, se activa cuando se genera un nuevo archivo en el directorio `transcripts` y se encarga de clasificar el texto que fue transcripto por *Lex* utilizando las capacidades de *Amazon Bedrock*.
+
+##### Permisos del Role de ejecución de la Lambda
+El role correspondiente a esta función va a necesitar tener el permiso de *BedrockFullAccess*, *AWSLambdaBasicExecutionRole*, y un permiso que nos permita hacer las operaciones Get y Post dentro del Bucket de S3 que configuramos anteriormente.
+
+##### Configuraciones Extra
+Dado que vamos a interactuar con la API de Bedrock, necesitamos configurar un timeout de 1 minuto para la función.
